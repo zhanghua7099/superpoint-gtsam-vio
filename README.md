@@ -24,3 +24,4 @@ $ python src/main.py --basedir /path/to/kitti/raw/data --date 2011_09_26 --drive
 ```
 
 ![VIO vs IMU-only vs Ground Truth](path.png)
+python src/main.py --basedir /home/zhy/datasets/kitti/ --date 2011_09_26 --drive 0022 --n_skip 10 --n_frames 701
