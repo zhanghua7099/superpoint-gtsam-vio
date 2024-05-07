@@ -3,8 +3,6 @@ import VisualInertialOdometry as vio
 import pykitti
 import argparse
 import SuperPointPretrainedNetwork.demo_superpoint as sp
-from pypopsift import popsift
-
 import cv2
 import os
 from scipy.spatial.transform import Rotation as R
@@ -40,13 +38,19 @@ def get_vision_data(tracker):
     return vision_data
 
 
-config = {
-    'sift_peak_threshold': 0.1,
-    'sift_edge_threshold': 10.0,
-    'feature_min_frames': 8000,
-    'feature_use_adaptive_suppression': False,
-    'feature_process_size': 2048
-}
+def cv2_sift_for_tracking(keypoints, descriptors):
+    pts = []
+    for kp in keypoints:
+        u = kp.pt[0]  # u
+        v = kp.pt[1]  # v
+        # confidence of keypoints
+        confidence = kp.response
+        pts.append([u, v, confidence])
+
+    pts = np.array(pts).T
+    desc = np.array(descriptors).T
+    return pts, desc
+
 
 if __name__ == '__main__':
     # Input arguments
@@ -105,34 +109,29 @@ if __name__ == '__main__':
         depth.append(cv2.imread(os.path.join(depth_data_path, filepath)))
 
     """
-    Run superpoint to get keypoints
+    Run SIFT to get keypoints
     """
-    print('==> Loading pre-trained network.')
-    # This class runs the SuperPoint network and processes its outputs.
-    # Inputs from list of default options in superpoint_demo.py.
-    fe = sp.SuperPointFrontend(weights_path='src/SuperPointPretrainedNetwork/superpoint_v1.pth',
-                            nms_dist=4,
-                            conf_thresh=0.15,  # 0.015
-                            nn_thresh=0.9,
-                            cuda=True)
-    print('==> Successfully loaded pre-trained network.')
+    print('==> Loading SIFT Detector from OpenCV')
+
+    sift = cv2.SIFT_create(nfeatures=0, nOctaveLayers=3, contrastThreshold=0.04, edgeThreshold=10, sigma=1.6)
+
+    print('==> Successfully loaded SIFT Detector')
 
     # This class helps merge consecutive point matches into tracks.
     max_length = n_frames // args.n_skip + 1
-    tracker = sp.PointTracker(max_length=max_length, nn_thresh=fe.nn_thresh)
+    tracker = sp.PointTracker(max_length = max_length, nn_thresh = 0.9)
 
-    print('==> Running SuperPoint')
+    print('==> Running SIFT Extraction')
     idx = range(0, n_frames, args.n_skip)
     for i in idx:
         img = data.get_cam1(i) # only get image from cam0
-        img_np = np.array(img).astype('float32') / 255.0
-        # pts, desc, _ = fe.run(img_np)
 
-        pts, desc = popsift(img_np.astype(np.uint8),  # values between 0, 1
-                            peak_threshold = config['sift_peak_threshold'],
-                            edge_threshold = config['sift_edge_threshold'],
-                            target_num_features = config['feature_min_frames'])
-
+        # For opencv, the color image should be uint8
+        img_np = np.array(img).astype(np.uint8)
+        keypoints, descriptors = sift.detectAndCompute(img_np, None)
+        
+        # convert the opencv format to superpoint
+        pts, desc = cv2_sift_for_tracking(keypoints, descriptors)
         tracker.update(pts, desc)
 
     print('==> Extracting keypoint tracks')
@@ -220,7 +219,7 @@ if __name__ == '__main__':
     plt.grid(True)
 
     plt.legend()
-    plt.savefig('path.eps')
+    plt.savefig('sift_path.png')
 
     # Plot pose as time series
     fig, axs = plt.subplots(3, figsize=(8, 8), facecolor='w', edgecolor='k')
@@ -254,7 +253,7 @@ if __name__ == '__main__':
     axs[2].set_ylabel('$\\theta\ (rad)$')
     
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.savefig('poses.eps')
+    plt.savefig('sift_poses.eps')
 
     # Plot pose as time series
     fig, axs = plt.subplots(3, figsize=(8, 8), facecolor='w', edgecolor='k')
@@ -284,7 +283,7 @@ if __name__ == '__main__':
     axs[2].set_ylabel('$e_{\\theta}\ (rad)$')
     
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.savefig('errors.eps')
+    plt.savefig('sift_errors.eps')
 
     plt.show()
 
