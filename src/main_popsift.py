@@ -3,6 +3,8 @@ import VisualInertialOdometry as vio
 import pykitti
 import argparse
 import SuperPointPretrainedNetwork.demo_superpoint as sp
+from pypopsift import popsift
+
 import cv2
 import os
 from scipy.spatial.transform import Rotation as R
@@ -37,6 +39,14 @@ def get_vision_data(tracker):
         vision_data[j, i] = np.array([int(round(pt2[0])), int(round(pt2[1]))])
     return vision_data
 
+
+config = {
+    'sift_peak_threshold': 0.1,
+    'sift_edge_threshold': 10.0,
+    'feature_min_frames': 8000,
+    'feature_use_adaptive_suppression': False,
+    'feature_process_size': 2048
+}
 
 if __name__ == '__main__':
     # Input arguments
@@ -116,7 +126,13 @@ if __name__ == '__main__':
     for i in idx:
         img = data.get_cam1(i) # only get image from cam0
         img_np = np.array(img).astype('float32') / 255.0
-        pts, desc, _ = fe.run(img_np)
+        # pts, desc, _ = fe.run(img_np)
+
+        pts, desc = popsift(img_np.astype(np.uint8),  # values between 0, 1
+                            peak_threshold = config['sift_peak_threshold'],
+                            edge_threshold = config['sift_edge_threshold'],
+                            target_num_features = config['feature_min_frames'])
+
         tracker.update(pts, desc)
 
     print('==> Extracting keypoint tracks')
