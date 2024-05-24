@@ -51,6 +51,8 @@ if __name__ == '__main__':
     fig, axs = plt.subplots(1, figsize=(12, 8), facecolor='w', edgecolor='k')
     plt.subplots_adjust(right=0.95, left=0.1, bottom=0.17)
 
+    viz_tracking = True
+
     """ 
     Load KITTI raw data
     """
@@ -118,10 +120,18 @@ if __name__ == '__main__':
         img_np = np.array(img).astype('float32') / 255.0
         pts, desc, _ = fe.run(img_np)
         tracker.update(pts, desc)
+        
+        # visualize the tracking
+        if viz_tracking:
+            tracks = tracker.get_tracks(2)
+            tracks[:, 1] /= float(0.9)
+            out1 = (np.dstack((img_np, img_np, img_np)) * 255.).astype('uint8')
+            tracker.draw_tracks(out1, tracks)
+            cv2.imshow("out1", out1)
+            cv2.waitKey(1)
 
     print('==> Extracting keypoint tracks')
     vision_data = get_vision_data(tracker)
-
 
     """
     GTSAM parameters

@@ -6,7 +6,7 @@ import SuperPointPretrainedNetwork.demo_superpoint as sp
 import cv2
 import os
 from scipy.spatial.transform import Rotation as R
-
+from pypopsift import popsift
 import gtsam
 from gtsam.symbol_shorthand import B, V, X, L
 
@@ -38,13 +38,14 @@ def get_vision_data(tracker):
     return vision_data
 
 
-def cv2_sift_for_tracking(keypoints, descriptors):
+def popsift_for_tracking(keypoints, descriptors):
     pts = []
+    # print(keypoints)
     for kp in keypoints:
-        u = kp.pt[0]  # u
-        v = kp.pt[1]  # v
+        u = kp[0]  # u
+        v = kp[1]  # v
         # confidence of keypoints
-        confidence = kp.response
+        confidence = kp[2]
         pts.append([u, v, confidence])
 
     pts = np.array(pts).T
@@ -111,35 +112,36 @@ if __name__ == '__main__':
     """
     Run SIFT to get keypoints
     """
-    print('==> Loading SIFT Detector from OpenCV')
-
-    sift = cv2.SIFT_create(nfeatures=0, nOctaveLayers=3, contrastThreshold=0.04, edgeThreshold=10, sigma=1.6)
-
-    print('==> Successfully loaded SIFT Detector')
-
     # This class helps merge consecutive point matches into tracks.
     max_length = n_frames // args.n_skip + 1
     tracker = sp.PointTracker(max_length = max_length, nn_thresh = 0.9)
 
-    print('==> Running SIFT Extraction')
+    print('==> Running POPSIFT Extraction')
     idx = range(0, n_frames, args.n_skip)
     for i in idx:
         img = data.get_cam1(i) # only get image from cam0
+        print(i)
 
         # For opencv, the color image should be uint8
         img_np = np.array(img).astype(np.uint8)
-        keypoints, descriptors = sift.detectAndCompute(img_np, None)
+        keypoints, descriptors = popsift(img_np, peak_threshold = 0.1, edge_threshold=10.0, target_num_features=1000, downsampling=-1)
+        # sift.detectAndCompute(img_np, None)
         
         # convert the opencv format to superpoint
-        pts, desc = cv2_sift_for_tracking(keypoints, descriptors)
+        pts, desc = popsift_for_tracking(keypoints, descriptors)
         tracker.update(pts, desc)
 
-        # # visualize the tracking
+        # visualize the tracking
         # tracks = tracker.get_tracks(2)
-        # tracks[:, 1] /= float(0.9)
-        # out1 = img_np.copy()
-        # tracker.draw_tracks(out1, tracks)
+        
+        # # Primary output - Show point tracks overlayed on top of input image.
+        # # out1 = (np.dstack((img_np, img_np, img_np)) * 255.).astype('uint8')
+        # plot_fp = cv2.cvtColor(img_np.copy(), cv2.COLOR_GRAY2RGB)
 
+        # tracks[:, 1] /= float(0.9) # Normalize track scores to [0,1].
+        # plot_fp = tracker.draw_tracks(plot_fp, tracks)
+        # cv2.imshow("1", plot_fp)
+        # cv2.waitKey(1)
 
     print('==> Extracting keypoint tracks')
     vision_data = get_vision_data(tracker)
@@ -226,7 +228,7 @@ if __name__ == '__main__':
     plt.grid(True)
 
     plt.legend()
-    plt.savefig('sift_path.png')
+    plt.savefig('popsift_path.png')
 
     # Plot pose as time series
     fig, axs = plt.subplots(3, figsize=(8, 8), facecolor='w', edgecolor='k')
@@ -260,7 +262,7 @@ if __name__ == '__main__':
     axs[2].set_ylabel('$\\theta\ (rad)$')
     
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.savefig('sift_poses.eps')
+    plt.savefig('popsift_poses.eps')
 
     # Plot pose as time series
     fig, axs = plt.subplots(3, figsize=(8, 8), facecolor='w', edgecolor='k')
@@ -290,7 +292,7 @@ if __name__ == '__main__':
     axs[2].set_ylabel('$e_{\\theta}\ (rad)$')
     
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.savefig('sift_errors.eps')
+    plt.savefig('popsift_errors.eps')
 
     plt.show()
 
